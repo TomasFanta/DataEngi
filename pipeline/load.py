@@ -7,7 +7,7 @@ class StockIngestion(PipelineStep):
         """
         :param stock_symbols: str or list of str, stock tickers
         :param period: str, e.g. '1d', '5d', '1mo', '6mo', '1y'
-        :param interval: str, e.g. '1m', '5m', '1h', '1d'
+        :param interval: str, e.g. '1m', '5m', '1h','4h','1d'
         """
         self.stock_symbols = stock_symbols
         self.period = period

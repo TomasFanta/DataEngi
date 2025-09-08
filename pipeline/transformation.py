@@ -2,14 +2,17 @@ from .base import PipelineStep
 import pandas as pd
 
 class StockTransformation(PipelineStep):
-    def __init__(self,periodEma= 10,periodSma = 10):
+    def __init__(self,periodEma= 10,periodSma = 10,shiftNumber = 1,shiftConfirm=1):
         """
-            :param periodSma: int, Number of Days for Simple Moving Average, e.g. 10, 20, 30
-            :param periodEma: int, Number of Days for Exponential Moving Average, e.g. 10, 20, 30
-            :param tail: int, Number of
+            :param periodSma: int, Number of Days for Simple Moving Average (Default=10), e.g. 10, 20, 30
+            :param periodEma: int, Number of Days for Exponential Moving Average (Default=10), e.g. 10, 20, 30
+            :param shiftNumber: int, Max Number of shifts (Default=1), e.g. 1, 2, 3
+            :param shiftConfirm: int, Max Number of confirmation trend (Default=1), eg. 1, 2, 3
         """
         self.periodSma = periodSma
         self.periodEma = periodEma
+        self.shiftNumber = shiftNumber
+        self.shiftConfirma = shiftConfirm
 
 
     def sma(self, data: pd.DataFrame)-> pd.DataFrame:
@@ -20,36 +23,53 @@ class StockTransformation(PipelineStep):
         data[f"ema_{self.periodEma}"] = data["Close"].ewm(span=self.periodEma, min_periods=self.periodEma).mean()
         return data
 
-    def shiftData(self,data:pd.DataFrame) -> pd.DataFrame:
-        data[f"sma_{self.periodSma}shift"] = data[f"sma_{self.periodSma}"].shift(1)
-        data[f"ema_{self.periodEma}shift"] = data[f"ema_{self.periodEma}"].shift(1)
+    def shiftData(self, data: pd.DataFrame, shiftNumber: int = 1) -> pd.DataFrame:
+        """
+        Method is shifting data per number of requests from parameter.
+
+        :param data: DataFrame with SMA, EMA, and shifted columns
+        :param shiftNumber: int, number of shifts to go from today (default=1) 1 - yesterday, 2 - the day before yesterday...
+        :return: DataFrame with "sma/ema_period_shift i" column added
+        """
+
+        for i in range(1, shiftNumber + 1):  # loop from 1 to shiftNumber
+            data[f"sma_{self.periodSma}_shift{i}"] = data[f"sma_{self.periodSma}"].shift(i)
+            data[f"ema_{self.periodEma}_shift{i}"] = data[f"ema_{self.periodEma}"].shift(i)
         return data
 
-    def sma_ema_cross(self,data:pd.DataFrame)->pd.DataFrame:
-        # Long signal (Golden Cross)
-        long_signal = (
-                (data[f"ema_{self.periodEma}"] > data[f"sma_{self.periodSma}"])
-                &
-                (data[f"ema_{self.periodEma}shift"] <= data[f"sma_{self.periodSma}shift"])
-        ) # Buy
-        # Short signal (Death Cross)
-        short_signal = (
-            (data[f"ema_{self.periodEma}"] < data[f"sma_{self.periodSma}"])
-            &
-            (data[f"ema_{self.periodEma}shift"] >= data[f"sma_{self.periodSma}shift"])
-        )# Sell
+    def sma_ema_cross(self, data: pd.DataFrame, shiftConfirm: int = 1) -> pd.DataFrame:
+        """
+        Detects Golden Cross (buy) and Death Cross (sell) signals.
+        A signal is valid only if confirmed across all shifts up to shiftConfirm.
 
-        # Add new column "signal" to DataFrame
+        :param data: DataFrame with SMA, EMA, and shifted columns
+        :param shiftConfirm: int, number of past days to confirm the trend (default=1)
+        :return: DataFrame with "signal" column added
+        """
+
+        # Start with today's condition
+        long_signal = (data[f"ema_{self.periodEma}"] > data[f"sma_{self.periodSma}"])
+        short_signal = (data[f"ema_{self.periodEma}"] < data[f"sma_{self.periodSma}"])
+
+        # Enforce confirmation from shift1 ... shiftConfirm
+        for i in range(1, shiftConfirm + 1):
+            ema_shift = f"ema_{self.periodEma}_shift{i}"
+            sma_shift = f"sma_{self.periodSma}_shift{i}"
+
+            long_signal &= data[ema_shift] <= data[sma_shift]
+            short_signal &= data[ema_shift] >= data[sma_shift]
+
+        # Add "signal" column
         data["signal"] = 0
-        data.loc[long_signal, "signal"] = 1
-        data.loc[short_signal, "signal"] = -1
+        data.loc[long_signal, "signal"] = 1  # Buy
+        data.loc[short_signal, "signal"] = -1  # Sell
 
         return data
 
     def run(self, data:pd.DataFrame) -> pd.DataFrame:
         data = self.sma(data)
         data = self.ema(data)
-        data = self.shiftData(data)
-        data = self.sma_ema_cross(data)
+        data = self.shiftData(data,shiftNumber=3)
+        data = self.sma_ema_cross(data,shiftConfirm=3)
         return data
 

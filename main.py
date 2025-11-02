@@ -1,11 +1,11 @@
 from pipeline.load import StockIngestion
 from pipeline.transformation import StockTransformation
 from pipeline.indicatorMACD import indicatorMACD
-from pipeline.output import plot_stock_signals, plot_MACD_stock_signal, plot_sma_ema_macd_cross
+from pipeline.output import plot_stock_signals, plot_MACD_stock_signal, plot_sma_ema_macd_cross,plot_rsi_index
 
 def run_pipeline():
     # 1️⃣ Load data
-    ingestion = StockIngestion("PPTA","1y","1D")  # or ["PPTA", "AEM"]
+    ingestion = StockIngestion("PPTA","1y","1d")  # or ["PPTA", "AEM"]
     df = ingestion.run()
 
     # 2️⃣ Transform data
@@ -20,6 +20,7 @@ def run_pipeline():
     plot_stock_signals(df)
     plot_MACD_stock_signal(df_macd_analysis)
     plot_sma_ema_macd_cross(df_macd_analysis)
+    plot_rsi_index(df)
 
 if __name__ == "__main__":
     run_pipeline()

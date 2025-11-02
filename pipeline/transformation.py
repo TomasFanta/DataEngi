@@ -66,10 +66,26 @@ class StockTransformation(PipelineStep):
 
         return data
 
+    def rsi_compute(self,data:pd.DataFrame,rsi_period: int = 14) -> pd.DataFrame:
+        # RSI relative strength index
+        ## Oversold / overbought
+        rsi_period = rsi_period
+        data["gain"] = (data["Close"] - data["Open"]).apply(lambda x: x if x > 0 else 0)
+        data["loss"] = (data["Close"] - data["Open"]).apply(lambda x: -x if x < 0 else 0)
+
+        data["ema_gain"] = data["gain"].ewm(span=rsi_period, min_periods=rsi_period).mean()
+        data["ema_loss"] = data["loss"].ewm(span=rsi_period, min_periods=rsi_period).mean()
+        # rs
+        data["rs"] = data["ema_loss"] / data["ema_gain"]
+
+        data[f"rsi_{rsi_period}"] = 100 - (100 / (data["rs"] + 1))
+        return data
+
     def run(self, data:pd.DataFrame) -> pd.DataFrame:
         data = self.sma(data)
         data = self.ema(data)
         data = self.shiftData(data,shiftNumber=3)
         data = self.sma_ema_cross(data,shiftConfirm=3)
+        data = self.rsi_compute(data,rsi_period=14)
         return data
 
